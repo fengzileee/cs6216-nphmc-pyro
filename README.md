@@ -15,11 +15,20 @@ Then install the forked pyro and the utility package in develop mode:
 
 ```bash
 pip install -e pyro[extras]
-pip install -e cs6216-nphmc-utilities
 ```
 
 With `-e` flag, you don't have to re-install after making changes in the
 installed packages.
 
-`cs6216-nphmc-utilities` provides a command line interface `ndu` (NP-HMC
-development utilities). Run `ndu --help` for usage.
+Install dependencies
+
+``` bash
+pip install -r requirements.txt
+```
+
+## Random walk
+
+The python module `walk.py` contains scripts to
+
+- Generate samples of random walk using different methods.
+- Generate plots for the samples.
