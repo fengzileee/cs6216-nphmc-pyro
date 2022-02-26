@@ -152,7 +152,7 @@ def gt(
         help="Path to store the groundtruth samples.",
     ),
 ):
-    """Sample the groundtruth distribution."""
+    """Sample the groundtruth distribution by systematic resampling."""
     draw_dir = Path(draw_dir)
     files = glob.glob((draw_dir / "*.pickle").as_posix())
     log_weights = []
