@@ -1,6 +1,7 @@
 *.py[cod]
 __pycache__
 samples_*/*
+importance_draws_walk/*
 
 # C extensions
 *.so
