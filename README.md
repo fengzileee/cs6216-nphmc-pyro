@@ -48,7 +48,7 @@ the draws to do systematic resampling `./walk.py gt`.
 
 ### MCMC methods
 
-Do `./walk.py nuts -r 1`. See `./walk.py run --help` for help. 
+Do `./walk.py run nuts -r 1`. See `./walk.py run --help` for help. 
 
 ### Generate the plot
 
