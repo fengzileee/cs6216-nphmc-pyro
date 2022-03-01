@@ -37,7 +37,7 @@ def walk_model():
         distance = distance + torch.abs(step)
         position = position + step
         t = t + 1
-    pyro.sample("obs", pyro.distributions.Normal(1.1, 1.0), obs=distance)
+    pyro.sample("obs", pyro.distributions.Normal(1.1, 0.1), obs=distance)
     return start.item()
 
 
