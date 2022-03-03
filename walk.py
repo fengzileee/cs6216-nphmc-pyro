@@ -27,17 +27,17 @@ def get_random_string(length):
 def walk_model():
     import pyro
     import torch
-
-    start = pyro.sample("start", pyro.distributions.Uniform(0, 3))
+    # ZIRUI: add is_cont in the kwargs in the pyro.sample() 
+    start = pyro.sample("start", pyro.distributions.Uniform(0, 3), is_cont=False)
     t = 0
     position = start
     distance = torch.tensor(0.0)
     while position > 0 and position < 10:
-        step = pyro.sample(f"step_{t}", pyro.distributions.Uniform(-1, 1))
+        step = pyro.sample(f"step_{t}", pyro.distributions.Uniform(-1, 1), is_cont=False)
         distance = distance + torch.abs(step)
         position = position + step
         t = t + 1
-    pyro.sample("obs", pyro.distributions.Normal(1.1, 0.1), obs=distance)
+    pyro.sample("obs", pyro.distributions.Normal(1.1, 0.1), obs=distance, is_cont=False)
     return start.item()
 
 
