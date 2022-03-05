@@ -69,6 +69,15 @@ def run(
                 num_steps=num_steps,
                 adapt_step_size=False,
             )
+        elif method == "dhmc":
+            info = f"_{eps}_{num_steps}"
+            kernel = pyromcmc.DHMC(
+                walk_model,
+                step_size=eps,
+                num_steps=num_steps,
+                adapt_step_size=False,
+            )
+
         elif method == "nphmc":
             raise NotImplementedError(f"{method} not implemented!")
         else:
