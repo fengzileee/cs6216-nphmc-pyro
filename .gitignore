@@ -74,4 +74,4 @@ docs/_build
 
 # Mypy Cache
 .mypy_cache/
-text.ipynb
+test.ipynb
