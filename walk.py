@@ -69,9 +69,9 @@ def run(
                 num_steps=num_steps,
                 adapt_step_size=False,
             )
-        elif method == "dhmc":
+        elif method == "npdhmc":
             info = f"_{eps}_{num_steps}"
-            kernel = pyromcmc.DHMC(
+            kernel = pyromcmc.NPDHMC(
                 walk_model,
                 step_size=eps,
                 num_steps=num_steps,
@@ -192,7 +192,7 @@ def plot(
 
     data = {}
     samples_dir = Path(samples_dir).expanduser().resolve()
-    for label in ["hmc", "nuts", "nphmc", "groundtruth"]:
+    for label in ["hmc", "nuts", "dhmc", "groundtruth"]:
         files = glob.glob((samples_dir / label / "*.pickle").as_posix())
         if len(files) == 0:
             continue
