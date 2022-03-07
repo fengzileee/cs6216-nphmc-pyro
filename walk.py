@@ -94,7 +94,7 @@ def run(
         output_file = f"walk_{random_str}_{count}{info}.pickle"
         with open(output_dir / output_file, "wb") as f:
             pickle.dump(raw_samples, f)
-        mcmc.summary()
+        # mcmc.summary()
 
 
 def systematic_resampling(log_weights, values):
