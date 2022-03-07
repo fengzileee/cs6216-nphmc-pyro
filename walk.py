@@ -192,7 +192,7 @@ def plot(
 
     data = {}
     samples_dir = Path(samples_dir).expanduser().resolve()
-    for label in ["hmc", "nuts", "dhmc", "groundtruth"]:
+    for label in ["hmc", "nuts", "npdhmc", "groundtruth"]:
         files = glob.glob((samples_dir / label / "*.pickle").as_posix())
         if len(files) == 0:
             continue
