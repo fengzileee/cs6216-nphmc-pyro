@@ -27,17 +27,17 @@ def get_random_string(length):
 def walk_model():
     import pyro
     import torch
-
-    start = pyro.sample("start", pyro.distributions.Uniform(0, 3))
+    # ZIRUI: add is_cont in the kwargs in the pyro.sample() 
+    start = pyro.sample("start", pyro.distributions.Uniform(0, 3), is_cont=False)
     t = 0
     position = start
     distance = torch.tensor(0.0)
     while position > 0 and position < 10:
-        step = pyro.sample(f"step_{t}", pyro.distributions.Uniform(-1, 1))
+        step = pyro.sample(f"step_{t}", pyro.distributions.Uniform(-1, 1), is_cont=False)
         distance = distance + torch.abs(step)
         position = position + step
         t = t + 1
-    pyro.sample("obs", pyro.distributions.Normal(1.1, 0.1), obs=distance)
+    pyro.sample("obs", pyro.distributions.Normal(1.1, 0.1), obs=distance, is_cont=False)
     return start.item()
 
 
@@ -69,6 +69,15 @@ def run(
                 num_steps=num_steps,
                 adapt_step_size=False,
             )
+        elif method == "npdhmc":
+            info = f"_{eps}_{num_steps}"
+            kernel = pyromcmc.NPDHMC(
+                walk_model,
+                step_size=eps,
+                num_steps=num_steps,
+                adapt_step_size=False,
+            )
+
         elif method == "nphmc":
             raise NotImplementedError(f"{method} not implemented!")
         else:
@@ -85,7 +94,7 @@ def run(
         output_file = f"walk_{random_str}_{count}{info}.pickle"
         with open(output_dir / output_file, "wb") as f:
             pickle.dump(raw_samples, f)
-        mcmc.summary()
+        # mcmc.summary()
 
 
 def systematic_resampling(log_weights, values):
@@ -183,7 +192,7 @@ def plot(
 
     data = {}
     samples_dir = Path(samples_dir).expanduser().resolve()
-    for label in ["hmc", "nuts", "nphmc", "groundtruth"]:
+    for label in ["hmc", "nuts", "npdhmc", "groundtruth"]:
         files = glob.glob((samples_dir / label / "*.pickle").as_posix())
         if len(files) == 0:
             continue
