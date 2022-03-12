@@ -44,9 +44,32 @@ def walk_model():
     return start.item()
 
 
+def geometric_model():
+    import pyro
+    import torch
+
+    t = 0
+    ret = torch.tensor(1.0)
+    # prob of continue flipping
+    prob = pyro.sample("prob", pyro.distributions.Uniform(0.25, 0.75), is_cont=False)
+    while True:
+        draw = pyro.sample(f"draw_{t}", pyro.distributions.Uniform(0, 1), is_cont=False)
+        if draw.item() < prob.item():
+            ret = ret + torch.tensor(1)
+            t = t + 1
+        else:
+            break
+    pyro.sample(
+        "obs", pyro.distributions.Delta(torch.tensor(5.0)), obs=ret, is_cont=False
+    )
+    return prob.item()
+
+
 def get_model(model_name):
     if model_name == "random_walk":
-        return walk_model
+        return walk_model, "start"
+    elif model_name == "geometric":
+        return geometric_model, "prob"
     else:
         raise NotImplementedError(f"We don't have model {model_name}")
 
@@ -70,7 +93,7 @@ def run(
     """Generate samples using different MCMC methods."""
     import pyro.infer.mcmc as pyromcmc  # type: ignore
 
-    model = get_model(model_name)
+    model, target_node_name = get_model(model_name)
     output_dir = (
         Path(output_dir).expanduser().resolve() / model_name / "samples" / method
     )
@@ -102,7 +125,7 @@ def run(
         mcmc.run()
 
         samples = mcmc.get_samples()
-        raw_samples = [value.item() for value in samples["start"]]
+        raw_samples = [value.item() for value in samples[target_node_name]]
 
         output_dir.mkdir(parents=True, exist_ok=True)
         random_str = get_random_string(6)
@@ -151,7 +174,7 @@ def imp(
     """
     from pyro.infer.importance import Importance
 
-    model = get_model(model_name)
+    model, target_node_name = get_model(model_name)
     output_dir = (
         Path(output_dir).expanduser().resolve() / model_name / "importance_draws"
     )
@@ -167,7 +190,9 @@ def imp(
         importance.run()
 
         log_weights = [w.item() for w in importance.log_weights]
-        values = [t.nodes["start"]["value"].item() for t in importance.exec_traces]
+        values = [
+            t.nodes[target_node_name]["value"].item() for t in importance.exec_traces
+        ]
 
         with open(output_path, "wb") as f:
             pickle.dump([log_weights, values], f)
@@ -296,10 +321,11 @@ def _plot_distribution_of_distributions(
 def plot(output_dir: str = typer.Option("./output", "-o", help="Output data path.")):
     """Generate the plots of the groundtruth and all methods in all models."""
     output_dir = Path(output_dir).resolve().expanduser()
-    for model_name in ["random_walk"]:
-        # _plot_averaged_distributions(model_name, output_dir)
+    var_thresh_dict = {'random_walk': 1e-2, 'geometric': 1e-6}
+    for model_name, var_thresh in var_thresh_dict.items():
+        _plot_averaged_distributions(model_name, output_dir)
         for method_name in ["hmc", "nuts", "npdhmc"]:
-            _plot_distribution_of_distributions(model_name, method_name, output_dir)
+            _plot_distribution_of_distributions(model_name, method_name, output_dir, var_thresh)
 
 
 def main():
