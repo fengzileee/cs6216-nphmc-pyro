@@ -32,14 +32,39 @@ Install dependencies:
 pip install -r requirements.txt
 ```
 
-## Random walk
+## Usage
 
-The python module `walk.py` contains scripts for different purposes. To get help strings, run
+The python module `walk.py` contains scripts for different purposes. To get help
+strings for different commands, run
 
 ``` bash
 ./walk.py --help  # if walk.py is executable
 python walk.py --help
 ```
+
+All commands have an option of `--output-path`, whose default is `./output/`. It will have the following
+structure
+
+``` bash
+<output-path>
+|- random_walk
+| |- samples
+| | |- nuts/*.pickles
+| | |- hmc/*.pickles
+| | |- npdhmc/*.pickles
+| | |- groudtruth/*.pickles
+| |- importance_draws/*.pickles
+| |- result.png
+|- geometric/...
+|- <other_probabilistic_model>/...
+```
+
+The program will take care of generating and storing data according to this
+structure. You don't have to worry about it unless you are downloading
+pre-generated data.
+
+Most commands have an option of `--model-name`, whose default is `random_walk`. It will determine which
+probabilistic program is used.
 
 ### Groundtruth from importance sampling and systematic resampling
 
@@ -52,4 +77,4 @@ Do `./walk.py run nuts -r 1`. See `./walk.py run --help` for help.
 
 ### Generate the plot
 
-Do `./walk.py plot`.
+Do `./walk.py plot`. It generate plots for all models.

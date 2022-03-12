@@ -27,13 +27,16 @@ def get_random_string(length):
 def walk_model():
     import pyro
     import torch
-    # ZIRUI: add is_cont in the kwargs in the pyro.sample() 
+
+    # ZIRUI: add is_cont in the kwargs in the pyro.sample()
     start = pyro.sample("start", pyro.distributions.Uniform(0, 3), is_cont=False)
     t = 0
     position = start
     distance = torch.tensor(0.0)
     while position > 0 and position < 10:
-        step = pyro.sample(f"step_{t}", pyro.distributions.Uniform(-1, 1), is_cont=False)
+        step = pyro.sample(
+            f"step_{t}", pyro.distributions.Uniform(-1, 1), is_cont=False
+        )
         distance = distance + torch.abs(step)
         position = position + step
         t = t + 1
@@ -41,30 +44,45 @@ def walk_model():
     return start.item()
 
 
+def get_model(model_name):
+    if model_name == "random_walk":
+        return walk_model
+    else:
+        raise NotImplementedError(f"We don't have model {model_name}")
+
+
 @app.command()
 def run(
     method: str,
+    output_dir: str = typer.Option(
+        "./output", "-o", help="Path to the output data folder."
+    ),
+    model_name: str = typer.Option(
+        "random_walk", "-m", help="Name of the probabilistic program model."
+    ),
     count: int = typer.Option(1000, "-c", help="Number of samples to draw."),
     eps: float = typer.Option(0.1, "-e", help="Step size in leapfrog integration."),
     num_steps: int = typer.Option(
         50, "-l", help="Numer of steps in leapfrog integration."
     ),
-    output_dir: str = typer.Option("./samples_walk", "-d", help="Data directory."),
     rep: int = typer.Option(1, "-r", help="Number of repetitions of sampling"),
 ):
     """Generate samples using different MCMC methods."""
     import pyro.infer.mcmc as pyromcmc  # type: ignore
 
-    output_dir = Path(output_dir).expanduser().resolve() / method
+    model = get_model(model_name)
+    output_dir = (
+        Path(output_dir).expanduser().resolve() / model_name / "samples" / method
+    )
 
     for _ in range(rep):
         if method == "nuts":
             info = ""
-            kernel = pyromcmc.NUTS(walk_model)
+            kernel = pyromcmc.NUTS(model)
         elif method == "hmc":
             info = f"_{eps}_{num_steps}"
             kernel = pyromcmc.HMC(
-                walk_model,
+                model,
                 step_size=eps,
                 num_steps=num_steps,
                 adapt_step_size=False,
@@ -72,14 +90,11 @@ def run(
         elif method == "npdhmc":
             info = f"_{eps}_{num_steps}"
             kernel = pyromcmc.NPDHMC(
-                walk_model,
+                model,
                 step_size=eps,
                 num_steps=num_steps,
                 adapt_step_size=False,
             )
-
-        elif method == "nphmc":
-            raise NotImplementedError(f"{method} not implemented!")
         else:
             raise RuntimeError(f"Unknown method {method}")
 
@@ -91,10 +106,13 @@ def run(
 
         output_dir.mkdir(parents=True, exist_ok=True)
         random_str = get_random_string(6)
-        output_file = f"walk_{random_str}_{count}{info}.pickle"
+        output_file = f"{model_name}_{random_str}_{count}{info}.pickle"
         with open(output_dir / output_file, "wb") as f:
             pickle.dump(raw_samples, f)
-        # mcmc.summary()
+        try:
+            mcmc.summary()
+        except Exception:
+            pass
 
 
 def systematic_resampling(log_weights, values):
@@ -116,12 +134,14 @@ def systematic_resampling(log_weights, values):
 
 @app.command()
 def imp(
+    model_name: str = typer.Option(
+        "random_walk", "-m", help="Name of the probabilistic program model."
+    ),
     output_dir: str = typer.Option(
-        "./importance_draws_walk/",
-        "-d",
-        help="Path to store the importance sampling draws.",
+        "./output", "-o", help="Path to the output data folder."
     ),
     rep: int = typer.Option(1, "-r", help="Number of repetitions."),
+    count: int = typer.Option(10000, "-c", help="Number of draws."),
 ):
     """Repeatedly draw 10,000 samples using importance sampling.
 
@@ -131,14 +151,19 @@ def imp(
     """
     from pyro.infer.importance import Importance
 
-    count = 10000
-    output_dir = Path(output_dir).expanduser().resolve()
+    model = get_model(model_name)
+    output_dir = (
+        Path(output_dir).expanduser().resolve() / model_name / "importance_draws"
+    )
     output_dir.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
     for i in range(rep):
-        print(f"t = {round(time.time() - t0)} sec.\t Start importance sampling {i+1}/{rep}")
+        print(
+            f"t = {round(time.time() - t0)} sec.\t"
+            f"Start importance sampling {i+1}/{rep}. Count = {count}."
+        )
         output_path = output_dir / f"groundtruth_{get_random_string(10)}.pickle"
-        importance = Importance(walk_model, guide=None, num_samples=count)
+        importance = Importance(model, guide=None, num_samples=count)
         importance.run()
 
         log_weights = [w.item() for w in importance.log_weights]
@@ -150,19 +175,20 @@ def imp(
 
 @app.command()
 def gt(
-    draw_dir: str = typer.Option(
-        "./importance_draws_walk/",
-        "-d",
-        help="Path to store the groundtruth samples.",
+    model_name: str = typer.Option(
+        "random_walk", "-m", help="Name of the probabilistic program model."
     ),
     output_dir: str = typer.Option(
-        "./samples_walk/groundtruth",
-        "-o",
-        help="Path to store the groundtruth samples.",
+        "./output", "-o", help="Path to the output data folder."
     ),
 ):
     """Sample the groundtruth distribution by systematic resampling."""
-    draw_dir = Path(draw_dir)
+    output_dir = Path(output_dir).resolve().expanduser()
+    model_dir = output_dir / model_name
+    draw_dir = model_dir / "importance_draws"
+    if not draw_dir.exists():
+        raise ValueError(f"Importance draws directory {draw_dir} does not exist!")
+
     files = glob.glob((draw_dir / "*.pickle").as_posix())
     log_weights = []
     values = []
@@ -172,58 +198,56 @@ def gt(
             log_weights.extend(data[0])
             values.extend(data[1])
     resamples = systematic_resampling(log_weights, values)
-    output_dir = Path(output_dir).expanduser().resolve()
-    output_dir.mkdir(parents=True, exist_ok=True)
-    output_path = output_dir / "groundtruth.pickle"
-    with open(output_path, "wb") as f:
+    gt_dir = model_dir / "samples" / "groundtruth"
+    gt_dir.mkdir(parents=True, exist_ok=True)
+    gt_path = gt_dir / "groundtruth.pickle"
+    with open(gt_path, "wb") as f:
         pickle.dump(resamples, f)
 
 
 @app.command()
-def plot(
-    output_path: str = typer.Option("./output", "-o", help="Output image path."),
-    samples_dir: str = typer.Option(
-        "./samples_walk", "-s", help="Directory containing the samples."
-    ),
-):
-    """Generate the plots of the groundtruth and all methods."""
+def plot(output_dir: str = typer.Option("./output", "-o", help="Output data path.")):
+    """Generate the plots of the groundtruth and all methods in all models."""
     import pandas
     import seaborn as sns
 
-    data = {}
-    samples_dir = Path(samples_dir).expanduser().resolve()
-    for label in ["hmc", "nuts", "npdhmc", "groundtruth"]:
-        files = glob.glob((samples_dir / label / "*.pickle").as_posix())
-        if len(files) == 0:
-            continue
-        label_data = []
-        for f in files:
-            with open(f, "rb") as _f:
-                label_data.append(pickle.load(_f))
-        label_data = sum(label_data, [])
-        data[label] = label_data
+    output_dir = Path(output_dir).resolve().expanduser()
+    for model_name in ["random_walk"]:
+        data = {}
+        samples_dir = output_dir / model_name / "samples"
+        for label in ["hmc", "nuts", "npdhmc", "groundtruth"]:
+            files = glob.glob((samples_dir / label / "*.pickle").as_posix())
+            if len(files) == 0:
+                continue
+            label_data = []
+            for f in files:
+                with open(f, "rb") as _f:
+                    label_data.append(pickle.load(_f))
+            label_data = sum(label_data, [])
+            data[label] = label_data
 
-    for k, v in data.items():
-        print(k, len(v))
-    data_tuples = []
-    for label in data:
-        data_tuples.extend([(label, v) for v in data[label]])
+        for k, v in data.items():
+            print(k, len(v))
+        data_tuples = []
+        for label in data:
+            data_tuples.extend([(label, v) for v in data[label]])
 
-    x_label = "starting point"
-    dataframe = pandas.DataFrame(data_tuples, columns=["method", x_label])
-    plot = sns.displot(
-        data=dataframe,
-        x=x_label,
-        hue="method",
-        kind="kde",
-        common_norm=False,
-        facet_kws={"legend_out": False},
-        # palette=palette,
-        aspect=1,
-        height=4,
-    )
-    plot.set_ylabels(label="posterior density")
-    plot.savefig("walk-kde.png", bbox_inches="tight")
+        x_label = "starting point"
+        dataframe = pandas.DataFrame(data_tuples, columns=["method", x_label])
+        plot = sns.displot(
+            data=dataframe,
+            x=x_label,
+            hue="method",
+            kind="kde",
+            common_norm=False,
+            facet_kws={"legend_out": False},
+            # palette=palette,
+            aspect=1,
+            height=4,
+        )
+        image_save_path = output_dir / model_name / f"{model_name}_all.png"
+        plot.set_ylabels(label="posterior density")
+        plot.savefig(image_save_path.as_posix(), bbox_inches="tight")
 
 
 def main():
