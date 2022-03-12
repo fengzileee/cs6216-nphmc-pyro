@@ -205,49 +205,101 @@ def gt(
         pickle.dump(resamples, f)
 
 
-@app.command()
-def plot(output_dir: str = typer.Option("./output", "-o", help="Output data path.")):
-    """Generate the plots of the groundtruth and all methods in all models."""
+def _plot_averaged_distributions(model_name: str, output_dir: Path):
     import pandas
     import seaborn as sns
 
+    print(f"Generating averaged distribution plot for {model_name}")
+    data = {}
+    samples_dir = output_dir / model_name / "samples"
+    for label in ["hmc", "nuts", "npdhmc", "groundtruth"]:
+        files = glob.glob((samples_dir / label / "*.pickle").as_posix())
+        if len(files) == 0:
+            continue
+        label_data = []
+        for f in files:
+            with open(f, "rb") as _f:
+                label_data.append(pickle.load(_f))
+        label_data = sum(label_data, [])
+        data[label] = label_data
+
+    for k, v in data.items():
+        print(k, len(v))
+    data_tuples = []
+    for label in data:
+        data_tuples.extend([(label, v) for v in data[label]])
+
+    x_label = "starting point"
+    dataframe = pandas.DataFrame(data_tuples, columns=["method", x_label])
+    plot = sns.displot(
+        data=dataframe,
+        x=x_label,
+        hue="method",
+        kind="kde",
+        common_norm=False,
+        facet_kws={"legend_out": False},
+        # palette=palette,
+        aspect=1,
+        height=4,
+    )
+    image_save_path = output_dir / model_name / f"{model_name}_all.png"
+    plot.set_ylabels(label="posterior density")
+    plot.savefig(image_save_path.as_posix(), bbox_inches="tight")
+
+
+def _plot_distribution_of_distributions(
+    model_name: str, method_name: str, output_dir: Path, variacne_thresh: float = 1e-2
+):
+    import pandas
+    import seaborn as sns
+    import numpy as np
+
+    print(f"Generating {method_name} distribution plot for {model_name}")
+    data = {}
+    samples_dir = output_dir / model_name / "samples" / method_name
+    files = glob.glob((samples_dir / "*.pickle").as_posix())
+    if len(files) == 0:
+        return
+    data = []
+    for f in files:
+        with open(f, "rb") as _f:
+            data.append(pickle.load(_f))
+
+    print(f"{method_name} has {len(data)} repetitions.")
+
+    data_tuples = []
+    for i, rep in enumerate(data):
+        variance = np.var(rep)
+        if variance < variacne_thresh:
+            continue
+        data_tuples.extend([(str(i + 1), v) for v in rep])
+
+    x_label = "starting point"
+    dataframe = pandas.DataFrame(data_tuples, columns=["rep", x_label])
+    plot = sns.displot(
+        data=dataframe,
+        x=x_label,
+        hue="rep",
+        kind="kde",
+        common_norm=False,
+        facet_kws={"legend_out": False},
+        # palette=palette,
+        aspect=1,
+        height=4,
+    )
+    image_save_path = output_dir / model_name / f"{model_name}_{method_name}.png"
+    plot.set_ylabels(label="posterior density")
+    plot.savefig(image_save_path.as_posix(), bbox_inches="tight")
+
+
+@app.command()
+def plot(output_dir: str = typer.Option("./output", "-o", help="Output data path.")):
+    """Generate the plots of the groundtruth and all methods in all models."""
     output_dir = Path(output_dir).resolve().expanduser()
     for model_name in ["random_walk"]:
-        data = {}
-        samples_dir = output_dir / model_name / "samples"
-        for label in ["hmc", "nuts", "npdhmc", "groundtruth"]:
-            files = glob.glob((samples_dir / label / "*.pickle").as_posix())
-            if len(files) == 0:
-                continue
-            label_data = []
-            for f in files:
-                with open(f, "rb") as _f:
-                    label_data.append(pickle.load(_f))
-            label_data = sum(label_data, [])
-            data[label] = label_data
-
-        for k, v in data.items():
-            print(k, len(v))
-        data_tuples = []
-        for label in data:
-            data_tuples.extend([(label, v) for v in data[label]])
-
-        x_label = "starting point"
-        dataframe = pandas.DataFrame(data_tuples, columns=["method", x_label])
-        plot = sns.displot(
-            data=dataframe,
-            x=x_label,
-            hue="method",
-            kind="kde",
-            common_norm=False,
-            facet_kws={"legend_out": False},
-            # palette=palette,
-            aspect=1,
-            height=4,
-        )
-        image_save_path = output_dir / model_name / f"{model_name}_all.png"
-        plot.set_ylabels(label="posterior density")
-        plot.savefig(image_save_path.as_posix(), bbox_inches="tight")
+        # _plot_averaged_distributions(model_name, output_dir)
+        for method_name in ["hmc", "nuts", "npdhmc"]:
+            _plot_distribution_of_distributions(model_name, method_name, output_dir)
 
 
 def main():
