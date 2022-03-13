@@ -230,9 +230,10 @@ def gt(
         pickle.dump(resamples, f)
 
 
-def _plot_averaged_distributions(model_name: str, output_dir: Path):
+def _plot_averaged_distributions(model_name: str, output_dir: Path, variacne_thresh: float = 1e-2):
     import pandas
     import seaborn as sns
+    import numpy as np
 
     print(f"Generating averaged distribution plot for {model_name}")
     data = {}
@@ -244,7 +245,10 @@ def _plot_averaged_distributions(model_name: str, output_dir: Path):
         label_data = []
         for f in files:
             with open(f, "rb") as _f:
-                label_data.append(pickle.load(_f))
+                _data = pickle.load(_f)
+                if np.var(_data) < variacne_thresh:
+                    continue
+                label_data.append(_data)
         label_data = sum(label_data, [])
         data[label] = label_data
 
@@ -264,10 +268,10 @@ def _plot_averaged_distributions(model_name: str, output_dir: Path):
         common_norm=False,
         facet_kws={"legend_out": False},
         # palette=palette,
-        aspect=1,
+        aspect=1.5,
         height=4,
     )
-    image_save_path = output_dir / model_name / f"{model_name}_all.png"
+    image_save_path = output_dir / model_name / f"{model_name}_all.pdf"
     plot.set_ylabels(label="posterior density")
     plot.savefig(image_save_path.as_posix(), bbox_inches="tight")
 
@@ -312,7 +316,7 @@ def _plot_distribution_of_distributions(
         aspect=1,
         height=4,
     )
-    image_save_path = output_dir / model_name / f"{model_name}_{method_name}.png"
+    image_save_path = output_dir / model_name / f"{model_name}_{method_name}.pdf"
     plot.set_ylabels(label="posterior density")
     plot.savefig(image_save_path.as_posix(), bbox_inches="tight")
 
@@ -321,11 +325,13 @@ def _plot_distribution_of_distributions(
 def plot(output_dir: str = typer.Option("./output", "-o", help="Output data path.")):
     """Generate the plots of the groundtruth and all methods in all models."""
     output_dir = Path(output_dir).resolve().expanduser()
-    var_thresh_dict = {'random_walk': 1e-2, 'geometric': 1e-6}
+    var_thresh_dict = {"random_walk": 1e-2, "geometric": 1e-6}
     for model_name, var_thresh in var_thresh_dict.items():
         _plot_averaged_distributions(model_name, output_dir)
         for method_name in ["hmc", "nuts", "npdhmc"]:
-            _plot_distribution_of_distributions(model_name, method_name, output_dir, var_thresh)
+            _plot_distribution_of_distributions(
+                model_name, method_name, output_dir, var_thresh
+            )
 
 
 def main():
